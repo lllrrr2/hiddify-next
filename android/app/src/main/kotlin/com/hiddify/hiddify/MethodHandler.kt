@@ -7,13 +7,16 @@ import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.nekohasekai.libbox.Libbox
+import io.nekohasekai.mobile.Mobile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.io.File
 
 class MethodHandler(private val scope: CoroutineScope) : FlutterPlugin,
-        MethodChannel.MethodCallHandler {
+    MethodChannel.MethodCallHandler {
     private var channel: MethodChannel? = null
 
     companion object {
@@ -21,8 +24,9 @@ class MethodHandler(private val scope: CoroutineScope) : FlutterPlugin,
         const val channelName = "com.hiddify.app/method"
 
         enum class Trigger(val method: String) {
+            Setup("setup"),
             ParseConfig("parse_config"),
-            ChangeConfigOptions("change_config_options"),
+            changeHiddifyOptions("change_hiddify_options"),
             GenerateConfig("generate_config"),
             Start("start"),
             Stop("stop"),
@@ -30,13 +34,14 @@ class MethodHandler(private val scope: CoroutineScope) : FlutterPlugin,
             SelectOutbound("select_outbound"),
             UrlTest("url_test"),
             ClearLogs("clear_logs"),
+            GenerateWarpConfig("generate_warp_config"),
         }
     }
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         channel = MethodChannel(
-                flutterPluginBinding.binaryMessenger,
-                channelName,
+            flutterPluginBinding.binaryMessenger,
+            channelName,
         )
         channel!!.setMethodCallHandler(this)
     }
@@ -47,6 +52,27 @@ class MethodHandler(private val scope: CoroutineScope) : FlutterPlugin,
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
+            Trigger.Setup.method -> {
+                GlobalScope.launch {
+                    result.runCatching {
+                           val baseDir = Application.application.filesDir                
+                            baseDir.mkdirs()
+                            val workingDir = Application.application.getExternalFilesDir(null)
+                            workingDir?.mkdirs()
+                            val tempDir = Application.application.cacheDir
+                            tempDir.mkdirs()
+                            Log.d(TAG, "base dir: ${baseDir.path}")
+                            Log.d(TAG, "working dir: ${workingDir?.path}")
+                            Log.d(TAG, "temp dir: ${tempDir.path}")
+                            
+                            Mobile.setup(baseDir.path, workingDir?.path, tempDir.path, false)
+                            Libbox.redirectStderr(File(workingDir, "stderr2.log").path)
+
+                            success("")
+                    }
+                }
+            }
+
             Trigger.ParseConfig.method -> {
                 scope.launch(Dispatchers.IO) {
                     result.runCatching {
@@ -60,7 +86,7 @@ class MethodHandler(private val scope: CoroutineScope) : FlutterPlugin,
                 }
             }
 
-            Trigger.ChangeConfigOptions.method -> {
+            Trigger.changeHiddifyOptions.method -> {
                 scope.launch {
                     result.runCatching {
                         val args = call.arguments as String
@@ -150,10 +176,10 @@ class MethodHandler(private val scope: CoroutineScope) : FlutterPlugin,
                     result.runCatching {
                         val args = call.arguments as Map<*, *>
                         Libbox.newStandaloneCommandClient()
-                                .selectOutbound(
-                                        args["groupTag"] as String,
-                                        args["outboundTag"] as String
-                                )
+                            .selectOutbound(
+                                args["groupTag"] as String,
+                                args["outboundTag"] as String
+                            )
                         success(true)
                     }
                 }
@@ -164,9 +190,9 @@ class MethodHandler(private val scope: CoroutineScope) : FlutterPlugin,
                     result.runCatching {
                         val args = call.arguments as Map<*, *>
                         Libbox.newStandaloneCommandClient()
-                                .urlTest(
-                                        args["groupTag"] as String
-                                )
+                            .urlTest(
+                                args["groupTag"] as String
+                            )
                         success(true)
                     }
                 }
@@ -177,6 +203,20 @@ class MethodHandler(private val scope: CoroutineScope) : FlutterPlugin,
                     result.runCatching {
                         MainActivity.instance.onServiceResetLogs(mutableListOf())
                         success(true)
+                    }
+                }
+            }
+
+            Trigger.GenerateWarpConfig.method -> {
+                scope.launch(Dispatchers.IO) {
+                    result.runCatching {
+                        val args = call.arguments as Map<*, *>
+                        val warpConfig = Mobile.generateWarpConfig(
+                            args["license-key"] as String,
+                            args["previous-account-id"] as String,
+                            args["previous-access-token"] as String,
+                        )
+                        success(warpConfig)
                     }
                 }
             }

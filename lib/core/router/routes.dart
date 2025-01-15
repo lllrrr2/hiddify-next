@@ -3,7 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:hiddify/core/router/app_router.dart';
 import 'package:hiddify/features/common/adaptive_root_scaffold.dart';
 import 'package:hiddify/features/config_option/overview/config_options_page.dart';
-import 'package:hiddify/features/geo_asset/overview/geo_assets_overview_page.dart';
+import 'package:hiddify/features/config_option/widget/quick_settings_modal.dart';
+
 import 'package:hiddify/features/home/widget/home_page.dart';
 import 'package:hiddify/features/intro/widget/intro_page.dart';
 import 'package:hiddify/features/log/overview/logs_overview_page.dart';
@@ -18,8 +19,7 @@ import 'package:hiddify/utils/utils.dart';
 
 part 'routes.g.dart';
 
-GlobalKey<NavigatorState>? _dynamicRootKey =
-    useMobileRouter ? rootNavigatorKey : null;
+GlobalKey<NavigatorState>? _dynamicRootKey = useMobileRouter ? rootNavigatorKey : null;
 
 @TypedShellRoute<MobileWrapperRoute>(
   routes: [
@@ -43,27 +43,27 @@ GlobalKey<NavigatorState>? _dynamicRootKey =
           path: "profiles/:id",
           name: ProfileDetailsRoute.name,
         ),
-        TypedGoRoute<LogsOverviewRoute>(
-          path: "logs",
-          name: LogsOverviewRoute.name,
+        TypedGoRoute<ConfigOptionsRoute>(
+          path: "config-options",
+          name: ConfigOptionsRoute.name,
+        ),
+        TypedGoRoute<QuickSettingsRoute>(
+          path: "quick-settings",
+          name: QuickSettingsRoute.name,
         ),
         TypedGoRoute<SettingsRoute>(
           path: "settings",
           name: SettingsRoute.name,
           routes: [
-            TypedGoRoute<ConfigOptionsRoute>(
-              path: "config-options",
-              name: ConfigOptionsRoute.name,
-            ),
             TypedGoRoute<PerAppProxyRoute>(
               path: "per-app-proxy",
               name: PerAppProxyRoute.name,
             ),
-            TypedGoRoute<GeoAssetsRoute>(
-              path: "routing-assets",
-              name: GeoAssetsRoute.name,
-            ),
           ],
+        ),
+        TypedGoRoute<LogsOverviewRoute>(
+          path: "logs",
+          name: LogsOverviewRoute.name,
         ),
         TypedGoRoute<AboutRoute>(
           path: "about",
@@ -108,29 +108,28 @@ class MobileWrapperRoute extends ShellRouteData {
           path: "profiles/:id",
           name: ProfileDetailsRoute.name,
         ),
+        TypedGoRoute<QuickSettingsRoute>(
+          path: "quick-settings",
+          name: QuickSettingsRoute.name,
+        ),
       ],
     ),
     TypedGoRoute<ProxiesRoute>(
       path: "/proxies",
       name: ProxiesRoute.name,
     ),
-    TypedGoRoute<LogsOverviewRoute>(
-      path: "/logs",
-      name: LogsOverviewRoute.name,
+    TypedGoRoute<ConfigOptionsRoute>(
+      path: "/config-options",
+      name: ConfigOptionsRoute.name,
     ),
     TypedGoRoute<SettingsRoute>(
       path: "/settings",
       name: SettingsRoute.name,
-      routes: [
-        TypedGoRoute<ConfigOptionsRoute>(
-          path: "config-options",
-          name: ConfigOptionsRoute.name,
-        ),
-        TypedGoRoute<GeoAssetsRoute>(
-          path: "routing-assets",
-          name: GeoAssetsRoute.name,
-        ),
-      ],
+      routes: [],
+    ),
+    TypedGoRoute<LogsOverviewRoute>(
+      path: "/logs",
+      name: LogsOverviewRoute.name,
     ),
     TypedGoRoute<AboutRoute>(
       path: "/about",
@@ -154,7 +153,7 @@ class IntroRoute extends GoRouteData {
 
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
-    return const MaterialPage(
+    return MaterialPage(
       fullscreenDialog: true,
       name: name,
       child: IntroPage(),
@@ -220,8 +219,7 @@ class ProfilesOverviewRoute extends GoRouteData {
   Page<void> buildPage(BuildContext context, GoRouterState state) {
     return BottomSheetPage(
       name: name,
-      builder: (controller) =>
-          ProfilesOverviewModal(scrollController: controller),
+      builder: (controller) => ProfilesOverviewModal(scrollController: controller),
     );
   }
 }
@@ -269,12 +267,27 @@ class LogsOverviewRoute extends GoRouteData {
   Page<void> buildPage(BuildContext context, GoRouterState state) {
     if (useMobileRouter) {
       return const MaterialPage(
-        fullscreenDialog: true,
         name: name,
         child: LogsOverviewPage(),
       );
     }
     return const NoTransitionPage(name: name, child: LogsOverviewPage());
+  }
+}
+
+class QuickSettingsRoute extends GoRouteData {
+  const QuickSettingsRoute();
+  static const name = "Quick Settings";
+
+  static final GlobalKey<NavigatorState> $parentNavigatorKey = rootNavigatorKey;
+
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) {
+    return BottomSheetPage(
+      fixed: true,
+      name: name,
+      builder: (controller) => const QuickSettingsModal(),
+    );
   }
 }
 
@@ -288,7 +301,6 @@ class SettingsRoute extends GoRouteData {
   Page<void> buildPage(BuildContext context, GoRouterState state) {
     if (useMobileRouter) {
       return const MaterialPage(
-        fullscreenDialog: true,
         name: name,
         child: SettingsOverviewPage(),
       );
@@ -298,7 +310,8 @@ class SettingsRoute extends GoRouteData {
 }
 
 class ConfigOptionsRoute extends GoRouteData {
-  const ConfigOptionsRoute();
+  const ConfigOptionsRoute({this.section});
+  final String? section;
   static const name = "Config Options";
 
   static final GlobalKey<NavigatorState>? $parentNavigatorKey = _dynamicRootKey;
@@ -306,16 +319,14 @@ class ConfigOptionsRoute extends GoRouteData {
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
     if (useMobileRouter) {
-      return const MaterialPage(
-        fullscreenDialog: true,
+      return MaterialPage(
         name: name,
-        child: ConfigOptionsPage(),
+        child: ConfigOptionsPage(section: section),
       );
     }
-    return const MaterialPage(
-      fullscreenDialog: true,
+    return NoTransitionPage(
       name: name,
-      child: ConfigOptionsPage(),
+      child: ConfigOptionsPage(section: section),
     );
   }
 }
@@ -336,29 +347,6 @@ class PerAppProxyRoute extends GoRouteData {
   }
 }
 
-class GeoAssetsRoute extends GoRouteData {
-  const GeoAssetsRoute();
-  static const name = "Routing Assets";
-
-  static final GlobalKey<NavigatorState>? $parentNavigatorKey = _dynamicRootKey;
-
-  @override
-  Page<void> buildPage(BuildContext context, GoRouterState state) {
-    if (useMobileRouter) {
-      return const MaterialPage(
-        fullscreenDialog: true,
-        name: name,
-        child: GeoAssetsOverviewPage(),
-      );
-    }
-    return const MaterialPage(
-      fullscreenDialog: true,
-      name: name,
-      child: GeoAssetsOverviewPage(),
-    );
-  }
-}
-
 class AboutRoute extends GoRouteData {
   const AboutRoute();
   static const name = "About";
@@ -369,7 +357,6 @@ class AboutRoute extends GoRouteData {
   Page<void> buildPage(BuildContext context, GoRouterState state) {
     if (useMobileRouter) {
       return const MaterialPage(
-        fullscreenDialog: true,
         name: name,
         child: AboutPage(),
       );

@@ -1,3 +1,4 @@
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:hiddify/core/localization/translations.dart';
 import 'package:hiddify/core/model/failures.dart';
@@ -23,15 +24,35 @@ class ProxiesOverviewPage extends HookConsumerWidget with PresLogger {
           CustomToast.error(t.presentShortError(error)).show(context),
     );
 
+    final appBar = NestedAppBar(
+      title: Text(t.proxies.pageTitle),
+      actions: [
+        PopupMenuButton<ProxiesSort>(
+          initialValue: sortBy,
+          onSelected: ref.read(proxiesSortNotifierProvider.notifier).update,
+          icon: const Icon(FluentIcons.arrow_sort_24_regular),
+          tooltip: t.proxies.sortTooltip,
+          itemBuilder: (context) {
+            return [
+              ...ProxiesSort.values.map(
+                (e) => PopupMenuItem(
+                  value: e,
+                  child: Text(e.present(t)),
+                ),
+              ),
+            ];
+          },
+        ),
+      ],
+    );
+
     switch (asyncProxies) {
       case AsyncData(value: final groups):
         if (groups.isEmpty) {
           return Scaffold(
             body: CustomScrollView(
               slivers: [
-                NestedAppBar(
-                  title: Text(t.proxies.pageTitle),
-                ),
+                appBar,
                 SliverFillRemaining(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -50,28 +71,7 @@ class ProxiesOverviewPage extends HookConsumerWidget with PresLogger {
         return Scaffold(
           body: CustomScrollView(
             slivers: [
-              NestedAppBar(
-                title: Text(t.proxies.pageTitle),
-                actions: [
-                  PopupMenuButton<ProxiesSort>(
-                    initialValue: sortBy,
-                    onSelected:
-                        ref.read(proxiesSortNotifierProvider.notifier).update,
-                    icon: const Icon(Icons.sort),
-                    tooltip: t.proxies.sortTooltip,
-                    itemBuilder: (context) {
-                      return [
-                        ...ProxiesSort.values.map(
-                          (e) => PopupMenuItem(
-                            value: e,
-                            child: Text(e.present(t)),
-                          ),
-                        ),
-                      ];
-                    },
-                  ),
-                ],
-              ),
+              appBar,
               SliverLayoutBuilder(
                 builder: (context, constraints) {
                   final width = constraints.crossAxisExtent;
@@ -132,7 +132,7 @@ class ProxiesOverviewPage extends HookConsumerWidget with PresLogger {
           floatingActionButton: FloatingActionButton(
             onPressed: () async => notifier.urlTest(group.tag),
             tooltip: t.proxies.delayTestTooltip,
-            child: const Icon(Icons.bolt),
+            child: const Icon(FluentIcons.flash_24_filled),
           ),
         );
 
@@ -140,9 +140,7 @@ class ProxiesOverviewPage extends HookConsumerWidget with PresLogger {
         return Scaffold(
           body: CustomScrollView(
             slivers: [
-              NestedAppBar(
-                title: Text(t.proxies.pageTitle),
-              ),
+              appBar,
               SliverErrorBodyPlaceholder(
                 t.presentShortError(error),
                 icon: null,
@@ -155,9 +153,7 @@ class ProxiesOverviewPage extends HookConsumerWidget with PresLogger {
         return Scaffold(
           body: CustomScrollView(
             slivers: [
-              NestedAppBar(
-                title: Text(t.proxies.pageTitle),
-              ),
+              appBar,
               const SliverLoadingBodyPlaceholder(),
             ],
           ),

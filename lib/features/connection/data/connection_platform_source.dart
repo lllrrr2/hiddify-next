@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
 
 import 'package:hiddify/core/utils/ffi_utils.dart';
 import 'package:hiddify/utils/custom_loggers.dart';
+import 'package:hiddify/utils/utils.dart';
 import 'package:posix/posix.dart';
 import 'package:win32/win32.dart';
 

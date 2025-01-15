@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:fpdart/fpdart.dart';
@@ -7,37 +8,47 @@ import 'package:hiddify/singbox/model/singbox_config_option.dart';
 import 'package:hiddify/singbox/model/singbox_outbound.dart';
 import 'package:hiddify/singbox/model/singbox_stats.dart';
 import 'package:hiddify/singbox/model/singbox_status.dart';
+import 'package:hiddify/singbox/model/warp_account.dart';
 import 'package:hiddify/singbox/service/singbox_service.dart';
 import 'package:hiddify/utils/custom_loggers.dart';
 import 'package:rxdart/rxdart.dart';
 
 class PlatformSingboxService with InfraLogger implements SingboxService {
-  late final _methodChannel = const MethodChannel("com.hiddify.app/method");
-  late final _statusChannel =
-      const EventChannel("com.hiddify.app/service.status", JSONMethodCodec());
-  late final _alertsChannel =
-      const EventChannel("com.hiddify.app/service.alerts", JSONMethodCodec());
-  late final _logsChannel = const EventChannel("com.hiddify.app/service.logs");
+  static const channelPrefix = "com.hiddify.app";
+
+  static const methodChannel = MethodChannel("$channelPrefix/method");
+  static const statusChannel = EventChannel("$channelPrefix/service.status", JSONMethodCodec());
+  static const alertsChannel = EventChannel("$channelPrefix/service.alerts", JSONMethodCodec());
+  static const statsChannel = EventChannel("$channelPrefix/stats", JSONMethodCodec());
+  static const groupsChannel = EventChannel("$channelPrefix/groups");
+  static const activeGroupsChannel = EventChannel("$channelPrefix/active-groups");
+  static const logsChannel = EventChannel("$channelPrefix/service.logs");
 
   late final ValueStream<SingboxStatus> _status;
 
   @override
   Future<void> init() async {
     loggy.debug("initializing");
-    final status =
-        _statusChannel.receiveBroadcastStream().map(SingboxStatus.fromEvent);
-    final alerts =
-        _alertsChannel.receiveBroadcastStream().map(SingboxStatus.fromEvent);
+    final status = statusChannel.receiveBroadcastStream().map(SingboxStatus.fromEvent);
+    final alerts = alertsChannel.receiveBroadcastStream().map(SingboxStatus.fromEvent);
+
     _status = ValueConnectableStream(Rx.merge([status, alerts])).autoConnect();
     await _status.first;
   }
 
   @override
-  TaskEither<String, Unit> setup(
-    Directories directories,
-    bool debug,
-  ) =>
-      TaskEither.of(unit);
+  TaskEither<String, Unit> setup(Directories directories, bool debug) {
+    return TaskEither(
+      () async {
+        if (!Platform.isIOS) {
+          return right(unit);
+        }
+
+        await methodChannel.invokeMethod("setup");
+        return right(unit);
+      },
+    );
+  }
 
   @override
   TaskEither<String, Unit> validateConfigByPath(
@@ -47,7 +58,7 @@ class PlatformSingboxService with InfraLogger implements SingboxService {
   ) {
     return TaskEither(
       () async {
-        final message = await _methodChannel.invokeMethod<String>(
+        final message = await methodChannel.invokeMethod<String>(
           "parse_config",
           {"path": path, "tempPath": tempPath, "debug": debug},
         );
@@ -61,8 +72,9 @@ class PlatformSingboxService with InfraLogger implements SingboxService {
   TaskEither<String, Unit> changeOptions(SingboxConfigOption options) {
     return TaskEither(
       () async {
-        await _methodChannel.invokeMethod(
-          "change_config_options",
+        loggy.debug("changing options");
+        await methodChannel.invokeMethod(
+          "change_hiddify_options",
           jsonEncode(options.toJson()),
         );
         return right(unit);
@@ -71,12 +83,11 @@ class PlatformSingboxService with InfraLogger implements SingboxService {
   }
 
   @override
-  TaskEither<String, String> generateFullConfigByPath(
-    String path,
-  ) {
+  TaskEither<String, String> generateFullConfigByPath(String path) {
     return TaskEither(
       () async {
-        final configJson = await _methodChannel.invokeMethod<String>(
+        loggy.debug("generating full config by path");
+        final configJson = await methodChannel.invokeMethod<String>(
           "generate_config",
           {"path": path},
         );
@@ -97,7 +108,7 @@ class PlatformSingboxService with InfraLogger implements SingboxService {
     return TaskEither(
       () async {
         loggy.debug("starting");
-        await _methodChannel.invokeMethod(
+        await methodChannel.invokeMethod(
           "start",
           {"path": path, "name": name},
         );
@@ -111,7 +122,7 @@ class PlatformSingboxService with InfraLogger implements SingboxService {
     return TaskEither(
       () async {
         loggy.debug("stopping");
-        await _methodChannel.invokeMethod("stop");
+        await methodChannel.invokeMethod("stop");
         return right(unit);
       },
     );
@@ -126,7 +137,7 @@ class PlatformSingboxService with InfraLogger implements SingboxService {
     return TaskEither(
       () async {
         loggy.debug("restarting");
-        await _methodChannel.invokeMethod(
+        await methodChannel.invokeMethod(
           "restart",
           {"path": path, "name": name},
         );
@@ -136,10 +147,27 @@ class PlatformSingboxService with InfraLogger implements SingboxService {
   }
 
   @override
-  Stream<List<SingboxOutboundGroup>> watchOutbounds() {
-    const channel = EventChannel("com.hiddify.app/groups");
-    loggy.debug("watching outbounds");
-    return channel.receiveBroadcastStream().map(
+  TaskEither<String, Unit> resetTunnel() {
+    return TaskEither(
+      () async {
+        // only available on iOS (and macOS later)
+        if (!Platform.isIOS) {
+          throw UnimplementedError(
+            "reset tunnel function unavailable on platform",
+          );
+        }
+
+        loggy.debug("resetting tunnel");
+        await methodChannel.invokeMethod("reset");
+        return right(unit);
+      },
+    );
+  }
+
+  @override
+  Stream<List<SingboxOutboundGroup>> watchGroups() {
+    loggy.debug("watching groups");
+    return groupsChannel.receiveBroadcastStream().map(
       (event) {
         if (event case String _) {
           return (jsonDecode(event) as List).map((e) {
@@ -153,18 +181,35 @@ class PlatformSingboxService with InfraLogger implements SingboxService {
   }
 
   @override
+  Stream<List<SingboxOutboundGroup>> watchActiveGroups() {
+    loggy.debug("watching active groups");
+    return activeGroupsChannel.receiveBroadcastStream().map(
+      (event) {
+        if (event case String _) {
+          return (jsonDecode(event) as List).map((e) {
+            return SingboxOutboundGroup.fromJson(e as Map<String, dynamic>);
+          }).toList();
+        }
+        loggy.error("[active group client] unexpected type, msg: $event");
+        throw "invalid type";
+      },
+    );
+  }
+
+  @override
   Stream<SingboxStatus> watchStatus() => _status;
 
   @override
   Stream<SingboxStats> watchStats() {
-    const channel = EventChannel("com.hiddify.app/stats", JSONMethodCodec());
     loggy.debug("watching stats");
-    return channel.receiveBroadcastStream().map(
+    return statsChannel.receiveBroadcastStream().map(
       (event) {
         if (event case Map<String, dynamic> _) {
           return SingboxStats.fromJson(event);
         }
-        loggy.error("[stats client] unexpected type, msg: $event");
+        loggy.error(
+          "[stats client] unexpected type(${event.runtimeType}), msg: $event",
+        );
         throw "invalid type";
       },
     );
@@ -175,7 +220,7 @@ class PlatformSingboxService with InfraLogger implements SingboxService {
     return TaskEither(
       () async {
         loggy.debug("selecting outbound");
-        await _methodChannel.invokeMethod(
+        await methodChannel.invokeMethod(
           "select_outbound",
           {"groupTag": groupTag, "outboundTag": outboundTag},
         );
@@ -188,7 +233,7 @@ class PlatformSingboxService with InfraLogger implements SingboxService {
   TaskEither<String, Unit> urlTest(String groupTag) {
     return TaskEither(
       () async {
-        await _methodChannel.invokeMethod(
+        await methodChannel.invokeMethod(
           "url_test",
           {"groupTag": groupTag},
         );
@@ -199,17 +244,37 @@ class PlatformSingboxService with InfraLogger implements SingboxService {
 
   @override
   Stream<List<String>> watchLogs(String path) async* {
-    yield* _logsChannel
-        .receiveBroadcastStream()
-        .map((event) => (event as List).map((e) => e as String).toList());
+    yield* logsChannel.receiveBroadcastStream().map((event) => (event as List).map((e) => e as String).toList());
   }
 
   @override
   TaskEither<String, Unit> clearLogs() {
     return TaskEither(
       () async {
-        await _methodChannel.invokeMethod("clear_logs");
+        await methodChannel.invokeMethod("clear_logs");
         return right(unit);
+      },
+    );
+  }
+
+  @override
+  TaskEither<String, WarpResponse> generateWarpConfig({
+    required String licenseKey,
+    required String previousAccountId,
+    required String previousAccessToken,
+  }) {
+    return TaskEither(
+      () async {
+        loggy.debug("generating warp config");
+        final warpConfig = await methodChannel.invokeMethod(
+          "generate_warp_config",
+          {
+            "license-key": licenseKey,
+            "previous-account-id": previousAccountId,
+            "previous-access-token": previousAccessToken,
+          },
+        );
+        return right(warpFromJson(jsonDecode(warpConfig as String)));
       },
     );
   }

@@ -1,16 +1,18 @@
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gap/gap.dart';
 import 'package:hiddify/core/app_info/app_info_provider.dart';
+import 'package:hiddify/core/directories/directories_provider.dart';
 import 'package:hiddify/core/localization/translations.dart';
 import 'package:hiddify/core/model/constants.dart';
 import 'package:hiddify/core/model/failures.dart';
+import 'package:hiddify/core/widget/adaptive_icon.dart';
 import 'package:hiddify/features/app_update/notifier/app_update_notifier.dart';
 import 'package:hiddify/features/app_update/notifier/app_update_state.dart';
 import 'package:hiddify/features/app_update/widget/new_version_dialog.dart';
 import 'package:hiddify/features/common/nested_app_bar.dart';
 import 'package:hiddify/gen/assets.gen.dart';
-import 'package:hiddify/services/service_providers.dart';
 import 'package:hiddify/utils/utils.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
@@ -54,7 +56,7 @@ class AboutPage extends HookConsumerWidget {
                 height: 24,
                 child: CircularProgressIndicator(),
               ),
-            _ => const Icon(Icons.update),
+            _ => const Icon(FluentIcons.arrow_sync_24_regular),
           },
           onTap: () async {
             await ref.read(appUpdateNotifierProvider.notifier).check();
@@ -63,9 +65,10 @@ class AboutPage extends HookConsumerWidget {
       if (PlatformUtils.isDesktop)
         ListTile(
           title: Text(t.settings.general.openWorkingDir),
-          trailing: const Icon(Icons.arrow_outward_outlined),
+          trailing: const Icon(FluentIcons.open_folder_24_regular),
           onTap: () async {
-            final path = ref.read(filesEditorServiceProvider).workingDir.uri;
+            final path =
+                ref.watch(appDirectoriesProvider).requireValue.workingDir.uri;
             await UriUtils.tryLaunch(path);
           },
         ),
@@ -78,6 +81,7 @@ class AboutPage extends HookConsumerWidget {
             title: Text(t.about.pageTitle),
             actions: [
               PopupMenuButton(
+                icon: Icon(AdaptiveIcon(context).more),
                 itemBuilder: (context) {
                   return [
                     PopupMenuItem(
@@ -125,7 +129,7 @@ class AboutPage extends HookConsumerWidget {
                 if (conditionalTiles.isNotEmpty) const Divider(),
                 ListTile(
                   title: Text(t.about.sourceCode),
-                  trailing: const Icon(Icons.open_in_new),
+                  trailing: const Icon(FluentIcons.open_24_regular),
                   onTap: () async {
                     await UriUtils.tryLaunch(
                       Uri.parse(Constants.githubUrl),
@@ -134,7 +138,7 @@ class AboutPage extends HookConsumerWidget {
                 ),
                 ListTile(
                   title: Text(t.about.telegramChannel),
-                  trailing: const Icon(Icons.open_in_new),
+                  trailing: const Icon(FluentIcons.open_24_regular),
                   onTap: () async {
                     await UriUtils.tryLaunch(
                       Uri.parse(Constants.telegramChannelUrl),
@@ -143,7 +147,7 @@ class AboutPage extends HookConsumerWidget {
                 ),
                 ListTile(
                   title: Text(t.about.termsAndConditions),
-                  trailing: const Icon(Icons.open_in_new),
+                  trailing: const Icon(FluentIcons.open_24_regular),
                   onTap: () async {
                     await UriUtils.tryLaunch(
                       Uri.parse(Constants.termsAndConditionsUrl),
@@ -152,7 +156,7 @@ class AboutPage extends HookConsumerWidget {
                 ),
                 ListTile(
                   title: Text(t.about.privacyPolicy),
-                  trailing: const Icon(Icons.open_in_new),
+                  trailing: const Icon(FluentIcons.open_24_regular),
                   onTap: () async {
                     await UriUtils.tryLaunch(
                       Uri.parse(Constants.privacyPolicyUrl),
